@@ -4,7 +4,6 @@
 // Loads the pre-built index files from the languages/ folder, caches them in
 // localStorage so they only download once, then handles all search and display.
 // =============================================================================
-const CACHE_VERSION = 2; // Bump this to invalidate old cached indexes when you update them.
 // --- Configuration -----------------------------------------------------------
 
 const LANGUAGES = [
@@ -99,7 +98,7 @@ const LANGUAGES = [
 
 // Bump this number any time you rebuild the index files with new kaikki data.
 // The browser will detect the mismatch and re-download everything fresh.
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 
 // How many results to show per language card before collapsing the rest.
 const RESULTS_PER_CARD = 5;
