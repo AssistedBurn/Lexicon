@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lexicon</title>
+  <link rel="stylesheet" href="lexicon.css">
+</head>
+<body>
+  <div class="container">
+
+    <header>
+      <h1>Lexicon</h1>
+      <p class="subtitle">cross-language word explorer</p>
+      <div class="divider">
+        <span class="divider-ornament">✦</span>
+      </div>
+    </header>
+
+    <div class="search-wrap">
+      <input
+        type="text"
+        id="wordInput"
+        placeholder="Enter a word…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <span class="hint">↵ enter</span>
+    </div>
+
+    <div id="queryEcho" class="query-echo" style="display:none"></div>
+    <div id="results"></div>
+
+  </div>
+
+  <script src="lexicon.js"></script>
+</body>
+</html>
