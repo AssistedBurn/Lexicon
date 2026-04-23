@@ -1,5 +1,6 @@
 // =============================================================================
 // lexicon.js — Browser query engine
+// v2
 // =============================================================================
 // Loads the pre-built index files from the languages/ folder, caches them in
 // localStorage so they only download once, then handles all search and display.
