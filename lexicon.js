@@ -4,35 +4,96 @@
 // Loads the pre-built index files from the languages/ folder, caches them in
 // localStorage so they only download once, then handles all search and display.
 // =============================================================================
-
+const CACHE_VERSION = 2; // Bump this to invalidate old cached indexes when you update them.
 // --- Configuration -----------------------------------------------------------
 
 const LANGUAGES = [
+  // ── Existing ─────────────────────────────────────────────────────────────────
   {
     key:           'greek',
     name:          'Greek',
     indexFiles:    ['languages/greek_index.json'],
     transliterate: transliterateGreek,
+    rtl:           false,
   },
   {
-    // Latin is split into two files alphabetically — loaded and merged
-    // transparently so search works across the full language.
     key:           'latin',
     name:          'Latin',
     indexFiles:    ['languages/latin_index_a.json', 'languages/latin_index_b.json'],
     transliterate: null,
+    rtl:           false,
   },
   {
     key:           'german',
     name:          'German',
     indexFiles:    ['languages/german_index.json'],
     transliterate: null,
+    rtl:           false,
   },
   {
     key:           'swedish',
     name:          'Swedish',
     indexFiles:    ['languages/swedish_index.json'],
     transliterate: null,
+    rtl:           false,
+  },
+
+  // ── New ───────────────────────────────────────────────────────────────────────
+  {
+    key:           'ancientgreek',
+    name:          'Ancient Greek',
+    indexFiles:    ['languages/ancientgreek_index_a.json', 'languages/ancientgreek_index_b.json'],
+    transliterate: transliterateGreek, // polytonic Greek uses same map
+    rtl:           false,
+  },
+  {
+    key:           'finnish',
+    name:          'Finnish',
+    indexFiles:    ['languages/finnish_index_a.json', 'languages/finnish_index_b.json', 'languages/finnish_index_c.json'],
+    transliterate: transliterateFinnish,
+    rtl:           false,
+  },
+  {
+    key:           'japanese',
+    name:          'Japanese',
+    indexFiles:    ['languages/japanese_index_a.json', 'languages/japanese_index_b.json'],
+    transliterate: transliterateJapanese,
+    rtl:           false,
+  },
+  {
+    key:           'hebrew',
+    name:          'Hebrew',
+    indexFiles:    ['languages/hebrew_index.json'],
+    transliterate: transliterateHebrew,
+    rtl:           true,  // Hebrew reads right-to-left
+  },
+  {
+    key:           'icelandic',
+    name:          'Icelandic',
+    indexFiles:    ['languages/icelandic_index.json'],
+    transliterate: transliterateIcelandic,
+    rtl:           false,
+  },
+  {
+    key:           'welsh',
+    name:          'Welsh',
+    indexFiles:    ['languages/welsh_index.json'],
+    transliterate: null,
+    rtl:           false,
+  },
+  {
+    key:           'oldenglish',
+    name:          'Old English',
+    indexFiles:    ['languages/oldenglish_index.json'],
+    transliterate: null,
+    rtl:           false,
+  },
+  {
+    key:           'oldnorse',
+    name:          'Old Norse',
+    indexFiles:    ['languages/oldnorse_index.json'],
+    transliterate: transliterateOldNorse,
+    rtl:           false,
   },
 ];
 
@@ -121,6 +182,7 @@ async function loadAllIndexes() {
     statusBar.classList.add('fade-out');
     setTimeout(() => {
       document.getElementById('results').innerHTML = '';
+      renderToggles();
       document.getElementById('wordInput').focus();
     }, 400);
   }
@@ -202,6 +264,83 @@ function tryCache(key, data) {
 
 // --- Input handling ----------------------------------------------------------
 
+// --- Language toggles -------------------------------------------------------
+
+// Tracks which languages are currently enabled. Persisted in localStorage.
+let enabledLanguages = new Set(LANGUAGES.map(l => l.key));
+
+function renderToggles() {
+  const container = document.getElementById('langToggles');
+  if (!container) return;
+
+  // Restore saved preferences.
+  const saved = getCached('lexicon_enabled_langs');
+  if (saved && Array.isArray(saved)) {
+    enabledLanguages = new Set(saved);
+  }
+
+  // Select all / none buttons
+  const controls = document.createElement('div');
+  controls.className = 'toggle-controls';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = 'toggle-all-btn';
+  allBtn.textContent = 'Select all';
+  allBtn.addEventListener('click', () => {
+    enabledLanguages = new Set(LANGUAGES.map(l => l.key));
+    saveToggles();
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+  });
+
+  const noneBtn = document.createElement('button');
+  noneBtn.className = 'toggle-all-btn';
+  noneBtn.textContent = 'Clear all';
+  noneBtn.addEventListener('click', () => {
+    enabledLanguages = new Set();
+    saveToggles();
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+  });
+
+  controls.appendChild(allBtn);
+  controls.appendChild(noneBtn);
+  container.appendChild(controls);
+
+  // One checkbox per language.
+  const toggleWrap = document.createElement('div');
+  toggleWrap.className = 'lang-toggles';
+
+  LANGUAGES.forEach(lang => {
+    // Only show languages that actually loaded successfully.
+    if (!indexes[lang.key]) return;
+
+    const label = document.createElement('label');
+    label.className = 'lang-toggle';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = enabledLanguages.has(lang.key);
+    cb.addEventListener('change', () => {
+      if (cb.checked) enabledLanguages.add(lang.key);
+      else            enabledLanguages.delete(lang.key);
+      saveToggles();
+    });
+
+    const span = document.createElement('span');
+    span.className = 'lang-toggle-label';
+    span.textContent = lang.name;
+
+    label.appendChild(cb);
+    label.appendChild(span);
+    toggleWrap.appendChild(label);
+  });
+
+  container.appendChild(toggleWrap);
+}
+
+function saveToggles() {
+  tryCache('lexicon_enabled_langs', [...enabledLanguages]);
+}
+
 function setupInput() {
   const input = document.getElementById('wordInput');
 
@@ -254,6 +393,9 @@ function search(word) {
   let anyResults = false;
 
   LANGUAGES.forEach(lang => {
+    // Skip languages that are toggled off.
+    if (!enabledLanguages.has(lang.key)) return;
+
     const data = indexes[lang.key];
 
     // Language failed to load — show an error card.
@@ -335,41 +477,51 @@ function buildCard(lang, matches, searchWord) {
     return card;
   }
 
-  // Render up to RESULTS_PER_CARD entries, then a "show more" toggle.
-  const visible = matches.slice(0, RESULTS_PER_CARD);
-  const hidden  = matches.slice(RESULTS_PER_CARD);
+  // First result — primary, slightly larger, above the gold divider.
+  const primary = buildEntry(matches[0], lang, true);
+  card.appendChild(primary);
 
-  visible.forEach(entry => {
-    card.appendChild(buildEntry(entry, lang));
-  });
+  // If there are more results, add the gold divider then the rest.
+  if (matches.length > 1) {
+    const divider = document.createElement('div');
+    divider.className = 'result-divider';
+    divider.innerHTML = '<span class="result-divider-dot"></span>';
+    card.appendChild(divider);
 
-  if (hidden.length > 0) {
-    // Hidden entries wrapped in a collapsible container.
-    const moreWrap = document.createElement('div');
-    moreWrap.className = 'more-entries';
-    moreWrap.style.display = 'none';
-    hidden.forEach(entry => {
-      moreWrap.appendChild(buildEntry(entry, lang));
+    const rest = matches.slice(1, RESULTS_PER_CARD);
+    const hidden = matches.slice(RESULTS_PER_CARD);
+
+    rest.forEach(entry => {
+      card.appendChild(buildEntry(entry, lang, false));
     });
-    card.appendChild(moreWrap);
 
-    const toggle = document.createElement('button');
-    toggle.className = 'show-more-btn';
-    toggle.textContent = `+ ${hidden.length} more`;
-    toggle.addEventListener('click', () => {
-      const isOpen = moreWrap.style.display !== 'none';
-      moreWrap.style.display = isOpen ? 'none' : 'block';
-      toggle.textContent = isOpen ? `+ ${hidden.length} more` : '− show less';
-    });
-    card.appendChild(toggle);
+    if (hidden.length > 0) {
+      const moreWrap = document.createElement('div');
+      moreWrap.className = 'more-entries';
+      moreWrap.style.display = 'none';
+      hidden.forEach(entry => {
+        moreWrap.appendChild(buildEntry(entry, lang, false));
+      });
+      card.appendChild(moreWrap);
+
+      const toggle = document.createElement('button');
+      toggle.className = 'show-more-btn';
+      toggle.textContent = `+ ${hidden.length} more`;
+      toggle.addEventListener('click', () => {
+        const isOpen = moreWrap.style.display !== 'none';
+        moreWrap.style.display = isOpen ? 'none' : 'block';
+        toggle.textContent = isOpen ? `+ ${hidden.length} more` : '− show less';
+      });
+      card.appendChild(toggle);
+    }
   }
 
   return card;
 }
 
-function buildEntry(entry, lang) {
+function buildEntry(entry, lang, isPrimary = false) {
   const wrap = document.createElement('div');
-  wrap.className = 'entry';
+  wrap.className = isPrimary ? 'entry entry-primary' : 'entry entry-secondary';
 
   // --- Word + POS ---
   const wordRow = document.createElement('div');
@@ -389,10 +541,17 @@ function buildEntry(entry, lang) {
 
   wrap.appendChild(wordRow);
 
+  // --- RTL script flag ---
+  if (lang.rtl) {
+    nativeWord.setAttribute('dir', 'rtl');
+    nativeWord.style.fontFamily = 'serif';
+  }
+
   // --- Transliteration ---
   if (lang.transliterate) {
     const romanized = lang.transliterate(entry.word);
-    if (romanized !== entry.word) {
+    // transliterateJapanese returns null — skip silently rather than showing garbage.
+    if (romanized !== null && romanized !== entry.word) {
       const translit = document.createElement('div');
       translit.className = 'transliteration';
       translit.textContent = romanized;
@@ -512,6 +671,66 @@ function buildErrorCard(langName, message) {
 
 // --- Transliteration ---------------------------------------------------------
 
+// --- Finnish transliteration ------------------------------------------------
+// Finnish uses Latin script already but has special characters.
+function transliterateFinnish(text) {
+  return text
+    .replace(/ä/g, 'a').replace(/Ä/g, 'A')
+    .replace(/ö/g, 'o').replace(/Ö/g, 'O')
+    .replace(/å/g, 'o').replace(/Å/g, 'O');
+}
+
+// --- Icelandic transliteration -----------------------------------------------
+function transliterateIcelandic(text) {
+  return text
+    .replace(/þ/g, 'th').replace(/Þ/g, 'Th')
+    .replace(/ð/g, 'd').replace(/Ð/g, 'D')
+    .replace(/æ/g, 'ae').replace(/Æ/g, 'Ae')
+    .replace(/ö/g, 'o').replace(/Ö/g, 'O')
+    .replace(/á/g, 'a').replace(/Á/g, 'A')
+    .replace(/é/g, 'e').replace(/É/g, 'E')
+    .replace(/í/g, 'i').replace(/Í/g, 'I')
+    .replace(/ó/g, 'o').replace(/Ó/g, 'O')
+    .replace(/ú/g, 'u').replace(/Ú/g, 'U')
+    .replace(/ý/g, 'y').replace(/Ý/g, 'Y');
+}
+
+// --- Old Norse transliteration -----------------------------------------------
+// Old Norse shares most characters with Icelandic plus a few extras.
+function transliterateOldNorse(text) {
+  return transliterateIcelandic(text)
+    .replace(/ǫ/g, 'o').replace(/Ǫ/g, 'O')
+    .replace(/ę/g, 'e').replace(/Ę/g, 'E');
+}
+
+// --- Hebrew transliteration --------------------------------------------------
+// Basic academic transliteration of Hebrew consonants.
+function transliterateHebrew(text) {
+  const map = {
+    'א': "'",  'ב': 'b',  'ג': 'g',  'ד': 'd',  'ה': 'h',
+    'ו': 'v',  'ז': 'z',  'ח': 'kh', 'ט': 't',  'י': 'y',
+    'כ': 'k',  'ך': 'k',  'ל': 'l',  'מ': 'm',  'ם': 'm',
+    'נ': 'n',  'ן': 'n',  'ס': 's',  'ע': "'",  'פ': 'p',
+    'ף': 'p',  'צ': 'ts', 'ץ': 'ts', 'ק': 'q',  'ר': 'r',
+    'ש': 'sh', 'ת': 't',
+  };
+  // Strip vowel diacritics (nikud) and map consonants.
+  return text
+    .replace(/[ְ-ׇ]/g, '') // strip nikud
+    .split('').map(c => map[c] ?? c).join('');
+}
+
+// --- Japanese transliteration ------------------------------------------------
+// Japanese uses kanji and kana. We show the original script as-is since
+// proper romanization (romaji) requires a full morphological analyzer.
+// Instead we flag it so the UI can note the script type.
+function transliterateJapanese(text) {
+  // Return null to signal "no simple transliteration available"
+  // The UI will skip the transliteration line rather than show garbage.
+  return null;
+}
+
+// --- Greek transliteration ---------------------------------------------------
 function transliterateGreek(text) {
   // Maps modern Greek Unicode characters to their Latin equivalents.
   const map = {

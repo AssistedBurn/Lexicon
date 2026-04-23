@@ -31,28 +31,85 @@ const readline = require('readline');
 // --- Configuration -----------------------------------------------------------
 
 const LANGUAGES = [
+  // ── Existing languages ──────────────────────────────────────────────────────
   {
-    name: 'Greek',   input: 'kaikki.org-dictionary-Greek.jsonl',   output: 'greek_index.json',
+    name: 'Greek', input: 'kaikki.org-dictionary-Greek.jsonl',
     maxForms: 6, maxGlosses: 6, maxDerived: 6, maxRelated: 4, maxPerKeyword: 15,
-    split: false,
+    outputs: ['greek_index.json'],
+    splitPoints: [],
   },
   {
-    // Latin is split into two files alphabetically (a-m, n-z) to stay under
-    // GitHub's 100MB file size limit. The browser loads both transparently.
-    name: 'Latin',   input: 'kaikki.org-dictionary-Latin.jsonl',
-    output: 'latin_index_a.json', outputB: 'latin_index_b.json',
+    // Latin split a-m / n-z
+    name: 'Latin', input: 'kaikki.org-dictionary-Latin.jsonl',
     maxForms: 0, maxGlosses: 4, maxDerived: 0, maxRelated: 0, maxPerKeyword: 10,
-    split: true,
+    outputs: ['latin_index_a.json', 'latin_index_b.json'],
+    splitPoints: ['n'],
   },
   {
-    name: 'German',  input: 'kaikki.org-dictionary-German.jsonl',  output: 'german_index.json',
+    name: 'German', input: 'kaikki.org-dictionary-German.jsonl',
     maxForms: 4, maxGlosses: 4, maxDerived: 4, maxRelated: 3, maxPerKeyword: 10,
-    split: false,
+    outputs: ['german_index.json'],
+    splitPoints: [],
   },
   {
-    name: 'Swedish', input: 'kaikki.org-dictionary-Swedish.jsonl', output: 'swedish_index.json',
+    name: 'Swedish', input: 'kaikki.org-dictionary-Swedish.jsonl',
     maxForms: 6, maxGlosses: 6, maxDerived: 6, maxRelated: 4, maxPerKeyword: 15,
-    split: false,
+    outputs: ['swedish_index.json'],
+    splitPoints: [],
+  },
+
+  // ── New languages ────────────────────────────────────────────────────────────
+  {
+    // Ancient Greek — polytonic script, split for size
+    name: 'Ancient Greek', input: 'kaikki.org-dictionary-AncientGreek.jsonl',
+    maxForms: 4, maxGlosses: 5, maxDerived: 4, maxRelated: 3, maxPerKeyword: 12,
+    outputs: ['ancientgreek_index_a.json', 'ancientgreek_index_b.json'],
+    splitPoints: ['n'],
+  },
+  {
+    // Finnish — enormous (3.6GB), 3-way split, forms stripped entirely
+    name: 'Finnish', input: 'kaikki.org-dictionary-Finnish.jsonl',
+    maxForms: 0, maxGlosses: 3, maxDerived: 0, maxRelated: 0, maxPerKeyword: 8,
+    outputs: ['finnish_index_a.json', 'finnish_index_b.json', 'finnish_index_c.json'],
+    splitPoints: ['i', 'q'],
+  },
+  {
+    // Japanese — kanji/kana script, split for size
+    name: 'Japanese', input: 'kaikki.org-dictionary-Japanese.jsonl',
+    maxForms: 4, maxGlosses: 4, maxDerived: 3, maxRelated: 3, maxPerKeyword: 10,
+    outputs: ['japanese_index_a.json', 'japanese_index_b.json'],
+    splitPoints: ['n'],
+  },
+  {
+    // Hebrew — right-to-left script
+    name: 'Hebrew', input: 'kaikki.org-dictionary-Hebrew.jsonl',
+    maxForms: 6, maxGlosses: 6, maxDerived: 4, maxRelated: 4, maxPerKeyword: 15,
+    outputs: ['hebrew_index.json'],
+    splitPoints: [],
+  },
+  {
+    name: 'Icelandic', input: 'kaikki.org-dictionary-Icelandic.jsonl',
+    maxForms: 6, maxGlosses: 6, maxDerived: 6, maxRelated: 4, maxPerKeyword: 15,
+    outputs: ['icelandic_index.json'],
+    splitPoints: [],
+  },
+  {
+    name: 'Welsh', input: 'kaikki.org-dictionary-Welsh.jsonl',
+    maxForms: 6, maxGlosses: 6, maxDerived: 6, maxRelated: 4, maxPerKeyword: 15,
+    outputs: ['welsh_index.json'],
+    splitPoints: [],
+  },
+  {
+    name: 'Old English', input: 'kaikki.org-dictionary-OldEnglish.jsonl',
+    maxForms: 0, maxGlosses: 5, maxDerived: 4, maxRelated: 3, maxPerKeyword: 12,
+    outputs: ['oldenglish_index.json'],
+    splitPoints: [],
+  },
+  {
+    name: 'Old Norse', input: 'kaikki.org-dictionary-OldNorse.jsonl',
+    maxForms: 6, maxGlosses: 6, maxDerived: 6, maxRelated: 4, maxPerKeyword: 15,
+    outputs: ['oldnorse_index.json'],
+    splitPoints: [],
   },
 ];
 
@@ -63,7 +120,7 @@ const SKIP_POS      = new Set(['character', 'symbol', 'punct', 'number']);
 
 async function processLanguage(lang) {
   const inputPath  = path.join(LANGUAGES_DIR, lang.input);
-  const outputPath = path.join(LANGUAGES_DIR, lang.output);
+  // outputPath not used directly here — handled by writeIndex/writeSplit below.
 
   if (!fs.existsSync(inputPath)) {
     console.warn(`  [SKIP] File not found: ${inputPath}`);
@@ -200,10 +257,10 @@ async function processLanguage(lang) {
 
   console.log(`  Done. ${lineCount.toLocaleString()} lines, ${entries.length.toLocaleString()} unique entries, ${indexedCount.toLocaleString()} keyword mappings, ${skipCount.toLocaleString()} skipped.`);
 
-  if (lang.split) {
+  if (lang.splitPoints.length > 0) {
     await writeSplit(lang, entries, index);
   } else {
-    await writeIndex(path.join(LANGUAGES_DIR, lang.output), entries, index);
+    await writeIndex(path.join(LANGUAGES_DIR, lang.outputs[0]), entries, index);
   }
 }
 
@@ -235,21 +292,34 @@ async function writeIndex(outputPath, entries, index) {
   console.log(`  Saved. File size: ${fileSizeKB.toLocaleString()} KB`);
 }
 
-// Write two split index files for large languages (e.g. Latin).
-// Each file gets ONLY the entries it actually needs — no duplication.
-// Positions are re-numbered from 0 within each file.
+// Write split index files for large languages.
+// splitPoints defines the boundaries — e.g. ['n'] = a-m / n-z
+// e.g. ['i', 'q'] = a-h / i-p / q-z (for Finnish 3-way split)
+// Each file gets ONLY the entries it actually references.
 async function writeSplit(lang, entries, index) {
-  const outputPathA = path.join(LANGUAGES_DIR, lang.output);
-  const outputPathB = path.join(LANGUAGES_DIR, lang.outputB);
+  // Build key ranges from splitPoints.
+  // e.g. splitPoints ['n'] → ranges [['', 'n'], ['n', '']]
+  // e.g. splitPoints ['i','q'] → ranges [['','i'], ['i','q'], ['q','']]
+  const points = lang.splitPoints;
+  const ranges = [];
+  for (let i = 0; i <= points.length; i++) {
+    ranges.push([i === 0 ? '' : points[i - 1], i === points.length ? '' : points[i]]);
+  }
 
-  const keysA = Object.keys(index).filter(k => k < 'n');
-  const keysB = Object.keys(index).filter(k => k >= 'n');
+  const allKeys = Object.keys(index);
 
-  console.log(`  Writing ${lang.output} (a-m, ${keysA.length.toLocaleString()} keywords)...`);
-  await writeIndexSubset(outputPathA, entries, index, keysA);
-
-  console.log(`  Writing ${lang.outputB} (n-z, ${keysB.length.toLocaleString()} keywords)...`);
-  await writeIndexSubset(outputPathB, entries, index, keysB);
+  for (let i = 0; i < ranges.length; i++) {
+    const [from, to] = ranges[i];
+    const label = `${from || 'a'}-${to ? String.fromCharCode(to.charCodeAt(0) - 1) : 'z'}`;
+    const keys = allKeys.filter(k => {
+      if (from && k < from) return false;
+      if (to   && k >= to)  return false;
+      return true;
+    });
+    const outputPath = path.join(LANGUAGES_DIR, lang.outputs[i]);
+    console.log(`  Writing ${lang.outputs[i]} (${label}, ${keys.length.toLocaleString()} keywords)...`);
+    await writeIndexSubset(outputPath, entries, index, keys);
+  }
 }
 
 async function writeIndexSubset(outputPath, entries, index, keys) {
