@@ -825,3 +825,46 @@ input[type="text"]:focus {
 .entry-primary .transliteration {
   font-size: 1.9rem;
 }
+
+/* ── Loose match divider ── */
+
+.result-divider-loose::before,
+.result-divider-loose::after {
+  background: var(--muted);
+  opacity: 0.2;
+}
+
+.result-divider-loose .result-divider-dot {
+  background: var(--muted);
+  opacity: 0.3;
+}
+
+/* ── Loose match button ── */
+
+.show-more-loose {
+  color: var(--muted);
+  border-color: var(--border);
+  font-style: italic;
+  position: relative;
+}
+
+.show-more-loose:hover {
+  border-color: var(--muted);
+  color: var(--text);
+}
+
+/* Native tooltip styling — browser renders this on hover via title attribute */
+/* No extra CSS needed, title= handles it natively */
+
+/* ── Finnish warning ── */
+
+.lang-warning {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-style: italic;
+  letter-spacing: 0.03em;
+  margin-bottom: 10px;
+  padding: 5px 8px;
+  border-left: 2px solid var(--accent);
+  opacity: 0.7;
+}

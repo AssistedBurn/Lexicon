@@ -1,10 +1,10 @@
 // =============================================================================
 // lexicon.js — Browser query engine
-// v2
 // =============================================================================
 // Loads the pre-built index files from the languages/ folder, caches them in
 // localStorage so they only download once, then handles all search and display.
 // =============================================================================
+
 // --- Configuration -----------------------------------------------------------
 
 const LANGUAGES = [
@@ -99,7 +99,7 @@ const LANGUAGES = [
 
 // Bump this number any time you rebuild the index files with new kaikki data.
 // The browser will detect the mismatch and re-download everything fresh.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 1;
 
 // How many results to show per language card before collapsing the rest.
 const RESULTS_PER_CARD = 5;
@@ -420,22 +420,53 @@ function search(word) {
   }
 }
 
-// getMatches — looks up the word in the { entries, index } format.
-// entries[] holds all entry objects. index maps keywords to position arrays.
-// Tries exact match first, then falls back to prefix matches.
+// scoreEntry — scores how well an entry matches the search word.
+// Higher score = better match. Used to sort results by relevance.
+//
+// Scoring:
+//   10 — search word appears exactly as a whole word in a gloss
+//    5 — search word appears as part of a gloss phrase (substring)
+//    1 — index keyword match only, word not literally in any gloss
+function scoreEntry(entry, word) {
+  if (!entry.glosses || entry.glosses.length === 0) return 1;
+
+  const lowerWord = word.toLowerCase();
+  let best = 1;
+
+  for (const gloss of entry.glosses) {
+    const lowerGloss = gloss.toLowerCase();
+
+    // Exact whole-word match — word surrounded by word boundaries
+    // e.g. "tree" in "a tall tree" but not in "street"
+    const wordBoundary = new RegExp(`\b${lowerWord}\b`);
+    if (wordBoundary.test(lowerGloss)) {
+      return 10; // Can't do better than this, return immediately
+    }
+
+    // Substring match — word appears somewhere in the gloss
+    if (lowerGloss.includes(lowerWord)) {
+      best = Math.max(best, 5);
+    }
+  }
+
+  return best;
+}
+
+// getMatches — looks up the word in the { entries, index } format,
+// scores each result by gloss relevance, and returns sorted by score.
 function getMatches(data, word) {
   const { entries, index } = data;
   const seenPositions = new Set();
-  const results = [];
+  const raw = [];
 
-  // Helper — resolve positions to entry objects, deduplicated.
+  // Helper — collect entry objects, deduplicated by position.
   function addPositions(positions) {
     for (const pos of positions) {
       if (!seenPositions.has(pos) && entries[pos]) {
         seenPositions.add(pos);
-        results.push(entries[pos]);
+        raw.push(entries[pos]);
       }
-      if (results.length >= 30) return;
+      if (raw.length >= 30) return;
     }
   }
 
@@ -445,16 +476,20 @@ function getMatches(data, word) {
   }
 
   // Prefix matches — catches "breathe", "breathing" when searching "breath".
-  if (results.length < 30) {
+  if (raw.length < 30) {
     for (const key of Object.keys(index)) {
       if (key !== word && key.startsWith(word) && Array.isArray(index[key])) {
         addPositions(index[key]);
       }
-      if (results.length >= 30) break;
+      if (raw.length >= 30) break;
     }
   }
 
-  return results;
+  // Score and sort — best matches first.
+  return raw
+    .map(entry => ({ entry, score: scoreEntry(entry, word) }))
+    .sort((a, b) => b.score - a.score)
+    .map(({ entry, score }) => ({ ...entry, _score: score }));
 }
 
 // --- Card building -----------------------------------------------------------
@@ -469,6 +504,14 @@ function buildCard(lang, matches, searchWord) {
   label.textContent = lang.name;
   card.appendChild(label);
 
+  // Finnish warning
+  if (lang.key === 'finnish') {
+    const warn = document.createElement('div');
+    warn.className = 'lang-warning';
+    warn.textContent = 'Finnish index is experimental — results may be inaccurate.';
+    card.appendChild(warn);
+  }
+
   if (matches.length === 0) {
     const none = document.createElement('div');
     none.className = 'note';
@@ -477,46 +520,76 @@ function buildCard(lang, matches, searchWord) {
     return card;
   }
 
-  // First result — primary, slightly larger, above the gold divider.
-  const primary = buildEntry(matches[0], lang, true);
-  card.appendChild(primary);
+  // Split into precise (score >= 5, word literally in a gloss)
+  // and loose (score = 1, keyword index match only).
+  const precise = matches.filter(m => m._score >= 5);
+  const loose   = matches.filter(m => m._score < 5);
 
-  // If there are more results, add the gold divider then the rest.
-  if (matches.length > 1) {
+  // Use precise results if we have them, otherwise fall back to loose.
+  const primary  = precise.length > 0 ? precise : loose;
+  const overflow = precise.length > 0 ? loose   : [];
+
+  // First result — primary display above the gold divider.
+  card.appendChild(buildEntry(primary[0], lang, true));
+
+  // Remaining precise results below the divider.
+  if (primary.length > 1) {
     const divider = document.createElement('div');
     divider.className = 'result-divider';
     divider.innerHTML = '<span class="result-divider-dot"></span>';
     card.appendChild(divider);
 
-    const rest = matches.slice(1, RESULTS_PER_CARD);
-    const hidden = matches.slice(RESULTS_PER_CARD);
+    const visible = primary.slice(1, RESULTS_PER_CARD);
+    const hiddenPrecise = primary.slice(RESULTS_PER_CARD);
 
-    rest.forEach(entry => {
-      card.appendChild(buildEntry(entry, lang, false));
-    });
+    visible.forEach(entry => card.appendChild(buildEntry(entry, lang, false)));
 
-    if (hidden.length > 0) {
-      const moreWrap = document.createElement('div');
-      moreWrap.className = 'more-entries';
-      moreWrap.style.display = 'none';
-      hidden.forEach(entry => {
-        moreWrap.appendChild(buildEntry(entry, lang, false));
-      });
-      card.appendChild(moreWrap);
-
-      const toggle = document.createElement('button');
-      toggle.className = 'show-more-btn';
-      toggle.textContent = `+ ${hidden.length} more`;
-      toggle.addEventListener('click', () => {
-        const isOpen = moreWrap.style.display !== 'none';
-        moreWrap.style.display = isOpen ? 'none' : 'block';
-        toggle.textContent = isOpen ? `+ ${hidden.length} more` : '− show less';
-      });
-      card.appendChild(toggle);
+    if (hiddenPrecise.length > 0) {
+      card.appendChild(buildMoreSection(hiddenPrecise, lang, hiddenPrecise.length, false));
     }
   }
 
+  // Loose matches — shown in a separate collapsed section with tooltip.
+  if (overflow.length > 0) {
+    const looseDivider = document.createElement('div');
+    looseDivider.className = 'result-divider result-divider-loose';
+    looseDivider.innerHTML = '<span class="result-divider-dot"></span>';
+    card.appendChild(looseDivider);
+
+    card.appendChild(buildMoreSection(overflow, lang, overflow.length, true));
+  }
+
   return card;
+}
+
+function buildMoreSection(entries, lang, count, isLoose) {
+  const wrap = document.createElement('div');
+
+  const moreWrap = document.createElement('div');
+  moreWrap.className = 'more-entries';
+  moreWrap.style.display = 'none';
+  entries.forEach(entry => moreWrap.appendChild(buildEntry(entry, lang, false)));
+  wrap.appendChild(moreWrap);
+
+  const toggle = document.createElement('button');
+  toggle.className = isLoose ? 'show-more-btn show-more-loose' : 'show-more-btn';
+  toggle.textContent = `+ ${count} more`;
+
+  // Tooltip for loose matches
+  if (isLoose) {
+    toggle.title = 'These results are less accurate but may still be related';
+    toggle.textContent = `+ ${count} loosely related`;
+  }
+
+  toggle.addEventListener('click', () => {
+    const isOpen = moreWrap.style.display !== 'none';
+    moreWrap.style.display = isOpen ? 'none' : 'block';
+    const label = isLoose ? 'loosely related' : 'more';
+    toggle.textContent = isOpen ? `+ ${count} ${label}` : '− show less';
+  });
+
+  wrap.appendChild(toggle);
+  return wrap;
 }
 
 function buildEntry(entry, lang, isPrimary = false) {

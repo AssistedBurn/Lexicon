@@ -12,6 +12,10 @@
 #   3. Runs process.js inside the container
 #   4. Container is deleted automatically when done (--rm flag)
 #   5. Your index files appear in languages/ — Docker is done, never needed again
+#For Git, I keep forgetting so this note is just for me.
+#run git add . #then run git commit -m "put an update message here" #then run git push origin main --force 
+###I only use force because I am the only one working on this repo, so I don't have to worry about messing up anyone else's work. 
+####If you are working with other people, be careful with force push and make sure you understand what it does before using it.
 # =============================================================================
 
 # Stop on any error
