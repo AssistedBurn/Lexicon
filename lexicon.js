@@ -434,13 +434,35 @@ function scoreEntry(entry, word) {
   let best = 1;
 
   for (const gloss of entry.glosses) {
-    const lowerGloss = gloss.toLowerCase();
+    const lowerGloss = gloss.toLowerCase().trim();
 
-    // Exact whole-word match — word surrounded by word boundaries
+    // Perfect match — gloss IS the search word, or "a <word>" / "the <word>"
+    // These are direct translations e.g. gloss "tree" when searching "tree"
+    if (
+      lowerGloss === lowerWord ||
+      lowerGloss === `a ${lowerWord}` ||
+      lowerGloss === `the ${lowerWord}` ||
+      lowerGloss === `to ${lowerWord}`
+    ) {
+      return 20; // Highest possible — this is the direct translation
+    }
+
+    // Gloss starts with the word — e.g. "tree, plant" or "tree (botanical)"
+    // Very likely a direct translation with extra context
+    if (lowerGloss.startsWith(lowerWord + ',') ||
+        lowerGloss.startsWith(lowerWord + ' ') ||
+        lowerGloss.startsWith(lowerWord + ';') ||
+        lowerGloss.startsWith(lowerWord + '(')) {
+      best = Math.max(best, 15);
+      continue;
+    }
+
+    // Exact whole-word match anywhere in the gloss
     // e.g. "tree" in "a tall tree" but not in "street"
     const wordBoundary = new RegExp(`\b${lowerWord}\b`);
     if (wordBoundary.test(lowerGloss)) {
-      return 10; // Can't do better than this, return immediately
+      best = Math.max(best, 10);
+      continue;
     }
 
     // Substring match — word appears somewhere in the gloss
