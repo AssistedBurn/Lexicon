@@ -95,6 +95,27 @@ const LANGUAGES = [
     transliterate: transliterateOldNorse,
     rtl:           false,
   },
+  {
+    key:           'breton',
+    name:          'Breton',
+    indexFiles:    ['languages/breton_index.json'],
+    transliterate: null,
+    rtl:           false,
+  },
+  {
+    key:           'scottishgaelic',
+    name:          'Scottish Gaelic',
+    indexFiles:    ['languages/scottishgaelic_index.json'],
+    transliterate: null,
+    rtl:           false,
+  },
+  {
+    key:           'irish',
+    name:          'Irish',
+    indexFiles:    ['languages/irish_index.json'],
+    transliterate: null,
+    rtl:           false,
+  },
 ];
 
 // Bump this number any time you rebuild the index files with new kaikki data.

@@ -111,6 +111,26 @@ const LANGUAGES = [
     outputs: ['oldnorse_index.json'],
     splitPoints: [],
   },
+  {
+    // Breton is tiny — full data preserved
+    name: 'Breton', input: 'kaikki.org-dictionary-Breton.jsonl',
+    maxForms: 6, maxGlosses: 6, maxDerived: 6, maxRelated: 4, maxPerKeyword: 15,
+    outputs: ['breton_index.json'],
+    splitPoints: [],
+  },
+  {
+    name: 'Scottish Gaelic', input: 'kaikki.org-dictionary-ScottishGaelic.jsonl',
+    maxForms: 6, maxGlosses: 6, maxDerived: 6, maxRelated: 4, maxPerKeyword: 15,
+    outputs: ['scottishgaelic_index.json'],
+    splitPoints: [],
+  },
+  {
+    // Irish is borderline — conservative limits, split if needed
+    name: 'Irish', input: 'kaikki.org-dictionary-Irish.jsonl',
+    maxForms: 4, maxGlosses: 5, maxDerived: 4, maxRelated: 3, maxPerKeyword: 12,
+    outputs: ['irish_index.json'],
+    splitPoints: [],
+  },
 ];
 
 const LANGUAGES_DIR = path.join(__dirname, 'languages');
